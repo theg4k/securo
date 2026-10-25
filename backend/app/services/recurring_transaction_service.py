@@ -64,10 +64,12 @@ async def create_recurring_transaction(
     data: RecurringTransactionCreate,
 ) -> RecurringTransaction:
     await _verify_account_in_workspace(session, workspace_id, data.account_id)
-    next_occ = data.start_date
+    next_occ = _first_occurrence_on_or_after(
+        data.start_date, data.frequency, data.day_of_month, floor=data.start_date,
+    )
     if data.skip_first:
         next_occ = _advance_date(
-            data.start_date, data.frequency,
+            next_occ, data.frequency,
             intended_day=data.day_of_month or data.start_date.day,
         )
     recurring = RecurringTransaction(
@@ -211,6 +213,16 @@ def _first_occurrence_on_or_after(
     ``start`` later than ``floor`` still defers the rule to ``start``.
     """
     current = start
+    if intended_day is not None and frequency in (
+        "monthly", "quarterly", "semiannual", "yearly",
+    ):
+        current = start.replace(day=min(
+            intended_day, calendar.monthrange(start.year, start.month)[1],
+        ))
+        # The start is an eligibility boundary. A separately selected payday
+        # determines the first occurrence, including later in this same month.
+        if current < start:
+            current = _advance_date(current, frequency, intended_day=intended_day)
     while current < floor:
         current = _advance_date(current, frequency, intended_day=intended_day)
     return current

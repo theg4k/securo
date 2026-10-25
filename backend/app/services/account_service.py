@@ -650,10 +650,14 @@ async def _recompute_effective_dates(session: AsyncSession, account: Account) ->
     payment_due_day) changes, so historical transactions get rebucketed into
     the correct bill. Cheap: a few hundred rows per account at most."""
     result = await session.execute(
-        select(Transaction).where(Transaction.account_id == account.id)
+        select(Transaction, CreditCardBill.due_date)
+        .outerjoin(CreditCardBill, Transaction.bill_id == CreditCardBill.id)
+        .where(Transaction.account_id == account.id)
     )
-    for tx in result.scalars():
-        apply_effective_date(tx, account)
+    for tx, bill_due_date in result:
+        # Cycle edits classify unbilled rows; the bank's existing statement
+        # assignment remains authoritative for charges already billed.
+        apply_effective_date(tx, account, bill_due_date=bill_due_date)
 
 
 async def sync_opening_balance_for_connected_account(

@@ -214,6 +214,7 @@ export interface CreditCardBill {
   external_id: string
   due_date: string // YYYY-MM-DD
   total_amount: number
+  total_amount_primary?: number | null
   currency: string
   minimum_payment: number | null
 }

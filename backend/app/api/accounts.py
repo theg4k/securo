@@ -187,7 +187,22 @@ async def get_account_bills(
     )
     if bills is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
-    return bills
+    result = []
+    rates: dict[str, Decimal | None] = {}
+    for bill in bills:
+        serialized = CreditCardBillRead.model_validate(bill)
+        if bill.currency != ctx.user.primary_currency:
+            if bill.currency not in rates:
+                rates[bill.currency] = await _resolve_rate(
+                    session, bill.currency, ctx.user.primary_currency,
+                )
+            rate = rates[bill.currency]
+            if rate is not None:
+                serialized.total_amount_primary = float(
+                    (bill.total_amount * rate).quantize(Decimal("0.01"))
+                )
+        result.append(serialized)
+    return result
 
 
 @router.get("/{account_id}", response_model=AccountRead)

@@ -761,6 +761,45 @@ class TestTransactionUpdateRefreshesEffectiveDate:
 
 class TestAccountCycleEditRecomputesEffectiveDates:
     @pytest.mark.asyncio
+    async def test_cycle_edit_preserves_bank_bill_and_manual_assignments(
+        self, session, test_user, test_workspace, cc_account
+    ):
+        from app.models.credit_card_bill import CreditCardBill
+        from app.schemas.account import AccountUpdate
+
+        bill = CreditCardBill(
+            user_id=test_user.id, workspace_id=test_workspace.id,
+            account_id=cc_account.id, external_id="bank-october-statement",
+            due_date=date(2026, 10, 21), total_amount=Decimal("1000"), currency="BRL",
+        )
+        session.add(bill)
+        await session.flush()
+        billed = await _make_tx(
+            session, test_user.id, cc_account.id, date(2026, 9, 13), Decimal("100"),
+        )
+        billed.bill_id = bill.id
+        unbilled = await _make_tx(
+            session, test_user.id, cc_account.id, date(2026, 10, 14), Decimal("50"),
+        )
+        unbilled.status = "pending"
+        overridden = await _make_tx(
+            session, test_user.id, cc_account.id, date(2026, 9, 13), Decimal("25"),
+        )
+        overridden.bill_id = bill.id
+        overridden.effective_bill_date = date(2026, 11, 21)
+        await session.commit()
+
+        await account_service.update_account(
+            session, cc_account.id, test_workspace.id,
+            AccountUpdate(statement_close_day=14, payment_due_day=21),
+        )
+
+        assert billed.effective_date == date(2026, 10, 21)
+        assert billed.bill_id == bill.id
+        assert unbilled.effective_date == date(2026, 11, 21)
+        assert overridden.effective_date == date(2026, 11, 21)
+
+    @pytest.mark.asyncio
     async def test_changing_close_day_rebuckets_historical_txs(
         self, session, test_user, test_workspace, cc_account
     ):

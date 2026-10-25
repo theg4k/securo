@@ -13,7 +13,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 
 import AccountDetailPage from '@/pages/account-detail'
-import { renderWithProviders } from '@/test/utils'
+import { i18n, renderWithProviders } from '@/test/utils'
 
 const api = vi.hoisted(() => ({
   accounts: {
@@ -86,8 +86,9 @@ function txCalls() {
   return api.transactions.list.mock.calls.map(([args]) => args as Record<string, unknown>)
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks()
+  await i18n.changeLanguage('en')
   vi.setSystemTime(new Date('2026-09-08T12:00:00'))
   api.accounts.get.mockResolvedValue(account)
   api.accounts.bills.mockResolvedValue(bills)
@@ -111,6 +112,47 @@ async function renderPage() {
 }
 
 describe('credit card cycle window', () => {
+  it('keeps the bank statement total after payment and navigates October to November', async () => {
+    vi.setSystemTime(new Date('2026-10-24T12:00:00'))
+    api.accounts.get.mockResolvedValue({ ...account, statement_close_day: 14, payment_due_day: 21 })
+    api.accounts.bills.mockResolvedValue([
+      { ...bills[0], id: 'bill-sep', due_date: '2026-09-21', total_amount: 7358.48 },
+      { ...bills[1], id: 'bill-oct', due_date: '2026-10-21', total_amount: 10001.16 },
+    ])
+    api.accounts.summary.mockImplementation((_id, _from, _to, billId) => Promise.resolve({
+      monthly_income: 0, monthly_expenses: billId ? 3280.38 : 0,
+      projected_income: 0, projected_expenses: billId ? 3712.06 : 6152.57,
+    }))
+    const { user } = await renderPage()
+
+    await waitFor(() => expect(cycleHeader()).toHaveTextContent('Nov 2026'))
+    expect(txCalls().at(-1)).toMatchObject({ from: '2026-10-14', to: '2026-11-13', unbilled_only: true })
+    await user.click(screen.getByTitle('Previous cycle'))
+    await waitFor(() => expect(cycleHeader()).toHaveTextContent('Oct 2026'))
+    expect(screen.getByText(i18n.t('accounts.cycleBillTotal')).parentElement).toHaveTextContent('10,001.16')
+    expect(screen.getByText(i18n.t('accounts.utilization')).parentElement?.parentElement).toHaveTextContent('10,001.16')
+    expect(screen.getByRole('button', { name: /Oct 2026.*10,001.16/ })).toBeInTheDocument()
+
+    await user.click(screen.getByTitle('Next cycle'))
+    await waitFor(() => expect(cycleHeader()).toHaveTextContent('Nov 2026'))
+    expect(txCalls().at(-1)).toMatchObject({ from: '2026-10-14', to: '2026-11-13', unbilled_only: true })
+    await waitFor(() => expect(screen.getByText(i18n.t('accounts.cycleBillTotal')).parentElement).toHaveTextContent('6,152.57'))
+  })
+
+  it('converts the original bank statement total when displaying primary currency', async () => {
+    vi.setSystemTime(new Date('2026-10-24T12:00:00'))
+    api.accounts.get.mockResolvedValue({ ...account, currency: 'USD', statement_close_day: 14, payment_due_day: 21 })
+    api.accounts.bills.mockResolvedValue([
+      { ...bills[1], id: 'bill-oct', due_date: '2026-10-21', currency: 'USD', total_amount: 100, total_amount_primary: 500 },
+    ])
+    api.accounts.summary.mockResolvedValue({ monthly_expenses: 0, projected_expenses: 0, monthly_expenses_primary: 0, projected_expenses_primary: 0 })
+    const { user } = await renderPage()
+    await user.click(screen.getByTitle('Previous cycle'))
+    await waitFor(() => expect(cycleHeader()).toHaveTextContent('Oct 2026'))
+    await user.click(screen.getByRole('button', { name: /^BRL$/ }))
+    expect(screen.getByText(i18n.t('accounts.cycleBillTotal')).parentElement).toHaveTextContent('500.00')
+  })
+
   it('asks for unbilled transactions only on the cycle that is still open', async () => {
     await renderPage()
 

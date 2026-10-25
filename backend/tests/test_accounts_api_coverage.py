@@ -19,6 +19,42 @@ from app.models.fx_rate import FxRate
 NONEXISTENT = "00000000-0000-0000-0000-000000000000"
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("rate", [None, Decimal("5")])
+async def test_bank_statement_total_primary_requires_real_fx(
+    client, auth_headers, session, test_user, test_workspace, rate,
+):
+    from datetime import date
+    from app.models.credit_card_bill import CreditCardBill
+
+    card = Account(
+        user_id=test_user.id, workspace_id=test_workspace.id,
+        name="Foreign card", type="credit_card", currency="USD", balance=Decimal("0"),
+    )
+    session.add(card)
+    await session.flush()
+    session.add(CreditCardBill(
+        user_id=test_user.id, workspace_id=test_workspace.id, account_id=card.id,
+        external_id="paid-bank-statement", due_date=date(2026, 10, 21),
+        total_amount=Decimal("100.25"), currency="USD",
+    ))
+    if rate is not None:
+        session.add(FxRate(
+            base_currency="USD", quote_currency="BRL", date=app_today(),
+            rate=rate, source="test",
+        ))
+    await session.commit()
+
+    response = await client.get(f"/api/accounts/{card.id}/bills", headers=auth_headers)
+    assert response.status_code == 200
+    bill = response.json()[0]
+    assert bill["total_amount"] == pytest.approx(100.25)
+    if rate is None:
+        assert bill["total_amount_primary"] is None
+    else:
+        assert bill["total_amount_primary"] == pytest.approx(501.25)
+
+
 # ---------------------------------------------------------------------------
 # list_accounts
 # ---------------------------------------------------------------------------

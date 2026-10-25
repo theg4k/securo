@@ -86,6 +86,60 @@ async def test_create_with_skip_first(session: AsyncSession, test_user, test_wor
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("start", "payday", "skip_first", "expected"),
+    [
+        (date(2026, 10, 24), 30, False, date(2026, 10, 30)),
+        (date(2026, 10, 24), 12, False, date(2026, 11, 12)),
+        (date(2026, 10, 24), 30, True, date(2026, 11, 30)),
+        (date(2026, 2, 24), 31, False, date(2026, 2, 28)),
+        (date(2026, 10, 24), None, False, date(2026, 10, 24)),
+    ],
+)
+async def test_create_aligns_first_monthly_occurrence_to_payday(
+    session, test_user, test_workspace, test_account_for_recurring,
+    start, payday, skip_first, expected,
+):
+    rec = await create_recurring_transaction(
+        session, test_workspace.id, test_user.id,
+        RecurringTransactionCreate(
+            description="Variable salary", amount=Decimal("5100"), currency="BRL",
+            type="credit", frequency="monthly", start_date=start,
+            day_of_month=payday, skip_first=skip_first,
+            account_id=test_account_for_recurring.id,
+        ),
+    )
+    assert rec.next_occurrence == expected
+
+
+@pytest.mark.asyncio
+async def test_later_payday_does_not_generate_on_start_date(
+    session, test_user, test_workspace, test_account_for_recurring,
+):
+    rec = await create_recurring_transaction(
+        session, test_workspace.id, test_user.id,
+        RecurringTransactionCreate(
+            description="Salary", amount=Decimal("5100"), currency="BRL",
+            type="credit", frequency="monthly", start_date=date(2026, 10, 24),
+            day_of_month=30, account_id=test_account_for_recurring.id,
+        ),
+    )
+    assert await generate_pending(session, test_user.id, up_to=date(2026, 10, 24)) == 0
+    assert rec.next_occurrence == date(2026, 10, 30)
+    assert get_occurrences_in_range(
+        rec.next_occurrence, rec.frequency, None, date(2026, 10, 1), date(2026, 11, 1),
+        intended_day=30,
+    ) == [date(2026, 10, 30)]
+    assert await generate_pending(session, test_user.id, up_to=date(2026, 10, 30)) == 1
+    assert await generate_pending(session, test_user.id, up_to=date(2026, 10, 30)) == 0
+    rows = (await session.execute(
+        select(Transaction).where(Transaction.recurring_transaction_id == rec.id)
+    )).scalars().all()
+    assert [tx.date for tx in rows] == [date(2026, 10, 30)]
+    assert rec.next_occurrence == date(2026, 11, 30)
+
+
+@pytest.mark.asyncio
 async def test_get_recurring_transactions(
     session: AsyncSession, test_user, test_workspace, test_account_for_recurring
 ):

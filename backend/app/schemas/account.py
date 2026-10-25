@@ -103,6 +103,7 @@ class CreditCardBillRead(BaseModel):
     external_id: str
     due_date: date
     total_amount: float
+    total_amount_primary: Optional[float] = None
     currency: str
     minimum_payment: Optional[float] = None
 
