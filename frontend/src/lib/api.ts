@@ -1,6 +1,7 @@
 import axios from 'axios'
 import type { AxiosResponse } from 'axios'
 import { markDataChanged } from '@/lib/data-changed'
+import { appPaths } from '@/lib/app-paths'
 import type { NumberFormat, DateFormat } from '@/lib/format'
 import type {
   User,
@@ -106,7 +107,7 @@ import type {
 } from '@/types'
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: appPaths.apiBaseUrl,
 })
 export { api }
 
@@ -134,7 +135,7 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
-      window.location.href = '/login'
+      window.location.href = appPaths.route('/login')
     }
     return Promise.reject(error)
   }
@@ -1973,7 +1974,7 @@ export const agents = {
   },
   // Streaming chat endpoint — caller handles the SSE response themselves
   // (see lib/agents-stream.ts). We just expose the URL + body builder.
-  chatUrl: (agentId: string) => `/api/agents/${agentId}/chat`,
+  chatUrl: (agentId: string) => appPaths.api(`/agents/${agentId}/chat`),
 
   connections: {
     list: async (): Promise<LlmConnection[]> => {
@@ -2329,8 +2330,8 @@ export const publicInvoices = {
     // Bare axios, not the shared instance: the interceptors would attach
     // an Authorization header and a workspace id, and this route must
     // work for someone who has neither.
-    const { data } = await axios.get(`/api/public/invoices/${token}`)
+    const { data } = await axios.get(appPaths.api(`/public/invoices/${token}`))
     return data
   },
-  pdfUrl: (token: string): string => `/api/public/invoices/${token}/pdf`,
+  pdfUrl: (token: string): string => appPaths.api(`/public/invoices/${token}/pdf`),
 }

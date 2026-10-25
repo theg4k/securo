@@ -14,6 +14,9 @@ export default defineConfig(async ({ mode }) => {
   const env = loadEnv(mode, import.meta.dirname, '')
   const frontendUrl = env.FRONTEND_URL || process.env.FRONTEND_URL
   const backendUrl = env.BACKEND_URL || process.env.BACKEND_URL
+  const requestedBase = env.VITE_APP_BASE_PATH || process.env.VITE_APP_BASE_PATH || '/'
+  const baseSegments = requestedBase.trim().split('/').filter(Boolean)
+  const base = baseSegments.length ? `/${baseSegments.join('/')}/` : '/'
   const appVersionRoot = env.APP_VERSION_ROOT || process.env.APP_VERSION_ROOT
   const appVersion = await resolveAppVersion(
     appVersionRoot || import.meta.dirname,
@@ -21,6 +24,7 @@ export default defineConfig(async ({ mode }) => {
   )
 
   return {
+    base,
     define: {
       __APP_VERSION__: JSON.stringify(appVersion),
     },

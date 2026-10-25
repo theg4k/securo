@@ -13,6 +13,7 @@ import { isServerUnreachable } from '@/lib/auth-errors'
 import { resolveLocalAuthEnabled } from '@/lib/auth-config-utils'
 import { useTheme } from 'next-themes'
 import { setThemeBasedOnSystem } from '@/lib/theme-utils'
+import { appPaths } from '@/lib/app-paths'
 import {
   isConditionalPasskeySupported,
   isPasskeySupported,
@@ -202,7 +203,7 @@ export default function LoginPage() {
 
   const handleOIDCLogin = () => {
     conditionalPasskeyAbortRef.current?.abort()
-    window.location.href = '/api/auth/oidc/login'
+    window.location.href = appPaths.api('/auth/oidc/login')
   }
 
   const handlePasskeyLogin = async () => {

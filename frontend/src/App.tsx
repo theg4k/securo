@@ -14,6 +14,7 @@ import { AdminRoute } from '@/components/admin-route'
 import { AgentsRoute } from '@/components/agents-route'
 import { ModuleRoute } from '@/components/module-route'
 import { AppLayout } from '@/components/app-layout'
+import { appPaths } from '@/lib/app-paths'
 
 const SetupPage = lazy(() => import('@/pages/setup'))
 const LoginPage = lazy(() => import('@/pages/login'))
@@ -81,7 +82,7 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <CrossTabRefresh />
         <TooltipProvider>
-        <BrowserRouter>
+        <BrowserRouter basename={appPaths.basename}>
           <AuthProvider>
             <WorkspaceProvider>
             <Suspense fallback={<LoadingFallback />}>

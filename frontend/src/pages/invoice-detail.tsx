@@ -60,6 +60,7 @@ import type {
 } from '@/types'
 import { cn } from '@/lib/utils'
 import { formatCurrency } from '@/lib/format'
+import { appPaths } from '@/lib/app-paths'
 import { useDisplayLocale, useDateLocale } from '@/hooks/use-display-locale'
 import { usePrivacyMode } from '@/hooks/use-privacy-mode'
 import { useAuth } from '@/contexts/auth-context'
@@ -239,7 +240,7 @@ export default function InvoiceDetailPage() {
   const shareMutation = useMutation({
     mutationFn: () => invoicesApi.share(id),
     onSuccess: async (link) => {
-      const url = `${window.location.origin}${link.path}`
+      const url = `${window.location.origin}${appPaths.route(link.path)}`
       try {
         await navigator.clipboard.writeText(url)
         setCopied(true)
@@ -282,7 +283,7 @@ export default function InvoiceDetailPage() {
     .map((def) => ({ ...def, value: invoice.custom_fields?.[def.key] }))
     .filter((field): field is typeof field & { value: string } => Boolean(field.value))
   const shareUrl = invoice.share_token
-    ? `${window.location.origin}/i/${invoice.share_token}`
+    ? `${window.location.origin}${appPaths.route(`/i/${invoice.share_token}`)}`
     : null
   // "Repeat this": an issued receivable that is not already a period of
   // an agreement. A draft has nothing agreed yet, and a bill received is
