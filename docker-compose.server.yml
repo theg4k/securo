@@ -1,0 +1,66 @@
+# Local, branch-built images and loopback-only ports for a single-host install.
+# Combine with docker-compose.prod.yml; the latter remains the shared baseline.
+x-server-backend-image: &server-backend-image securo-backend:server
+x-server-frontend-url: &server-frontend-url "${FRONTEND_URL:?Set FRONTEND_URL in the server env file}"
+x-server-database-url: &server-database-url "postgresql+asyncpg://postgres:${DATABASE_PASSWORD:?Set DATABASE_PASSWORD in the server env file}@db:5432/securo"
+
+services:
+  db:
+    environment:
+      POSTGRES_PASSWORD: "${DATABASE_PASSWORD:?Set DATABASE_PASSWORD in the server env file}"
+
+  backend:
+    image: *server-backend-image
+    build:
+      context: ./backend
+    pull_policy: never
+    ports: !override
+      - "127.0.0.1:8000:8000"
+    environment:
+      DATABASE_URL: *server-database-url
+      FRONTEND_URL: *server-frontend-url
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+
+  frontend:
+    image: securo-frontend:server
+    build:
+      context: ./frontend
+      args:
+        VITE_APP_BASE_PATH: "${VITE_APP_BASE_PATH:-/finance/}"
+    pull_policy: never
+    ports: !override
+      - "127.0.0.1:3000:8080"
+    environment:
+      BACKEND_URL: http://backend:8000
+      FRONTEND_URL: *server-frontend-url
+
+  celery-worker:
+    image: *server-backend-image
+    pull_policy: never
+    environment:
+      DATABASE_URL: *server-database-url
+      FRONTEND_URL: *server-frontend-url
+    command:
+      - celery
+      - -A
+      - app.worker
+      - worker
+      - --loglevel=info
+      - --concurrency=1
+
+  celery-beat:
+    image: *server-backend-image
+    pull_policy: never
+    environment:
+      DATABASE_URL: *server-database-url
+      FRONTEND_URL: *server-frontend-url
+
