@@ -25,7 +25,7 @@ class LlmUsage(Base):
 
     provider: Mapped[str] = mapped_column(String(40))
     model: Mapped[str] = mapped_column(String(120))
-    # kind ∈ {"chat","embedding"}
+    # kind ∈ {"chat","embedding","categorization"}
     kind: Mapped[str] = mapped_column(String(20), default="chat")
 
     input_tokens: Mapped[int] = mapped_column(Integer, default=0)

@@ -119,6 +119,22 @@ class TransactionUpdate(BaseModel):
     apply_to: Literal["this", "future", "all"] = "this"
 
 
+class IdentifyCategoryRequest(BaseModel):
+    """Transaction text used for an explicit, single-item category suggestion."""
+
+    transaction_id: Optional[uuid.UUID] = None
+    description: str = Field(default="", max_length=500)
+    payee: Optional[str] = Field(default=None, max_length=500)
+    bank_category: Optional[str] = Field(default=None, max_length=100)
+    direction: Literal["debit", "credit"]
+
+
+class IdentifyCategoryResponse(BaseModel):
+    category_id: Optional[uuid.UUID] = None
+    category_name: Optional[str] = None
+    confidence: Optional[float] = None
+
+
 class InstallmentSeriesCreate(BaseModel):
     """Payload for POST /api/transactions/installments — repeats a purchase
     as ``installments`` equal payments."""

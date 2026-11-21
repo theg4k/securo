@@ -11,12 +11,14 @@ interface AuthContextType {
   user: User | null
   token: string | null
   isLoading: boolean
+  sessionUnavailable: boolean
+  retrySession: () => void
   login: (email: string, password: string) => Promise<LoginResult>
   verify2fa: (tempToken: string, code: string) => Promise<void>
   loginWithToken: (accessToken: string) => void
   register: (email: string, password: string, preferences?: Record<string, string>) => Promise<void>
   updateUser: (user: User) => void
-  logout: () => void
+  logout: () => Promise<void>
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null)

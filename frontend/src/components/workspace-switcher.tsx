@@ -46,6 +46,7 @@ import {
   ShieldCheck,
   Sparkles,
   Fingerprint,
+  UserRound,
 } from 'lucide-react'
 import { CategoryIcon } from '@/components/category-icon'
 import {
@@ -167,12 +168,9 @@ export function WorkspaceSwitcher({
             aria-label={current.name}
             title={current.name}
           >
-            <CategoryIcon
-              icon={workspaceIcon(current)}
-              color={workspaceColor(current)}
-              size="sm"
-              className="shrink-0"
-            />
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+              <UserRound size={14} strokeWidth={2} />
+            </div>
             <div className={cn('flex-1 min-w-0', collapsed && 'lg:hidden')}>
               <p className="text-xs font-semibold truncate">{current.name}</p>
               <p className="text-[10px] text-sidebar-muted/70 truncate">

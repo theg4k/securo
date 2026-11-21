@@ -113,6 +113,13 @@ class LLMProvider(ABC):
         self.api_key = api_key
         self.base_url: str = base_url or ""
         self.default_model = model
+        # Per-request callers such as transaction categorization can opt out
+        # of OpenRouter's account-default web plugin. The OpenAI-compatible
+        # provider translates this into a request-level plugin override.
+        self.disable_web_search = False
+        # Callers with bounded background work can shorten chat requests
+        # without changing the provider defaults for interactive conversations.
+        self.request_timeout_seconds = 120.0
         # Stable per-conversation id, set by the executor before each run.
         # Providers whose backends route on it send it as a request header.
         self.session_id: Optional[str] = None

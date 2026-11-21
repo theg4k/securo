@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/table'
 import { Input } from '@/components/ui/input'
 import { CategorySelect } from '@/components/category-select'
+import { IdentifyCategoryButton } from '@/components/identify-category-button'
 import { CategoryFilterDropdown } from '@/components/category-filter-dropdown'
 import {
   Select,
@@ -178,7 +179,7 @@ export function ImportReviewTable({
               <TableHead className="text-xs font-medium text-muted-foreground py-3 text-right w-[120px]">
                 {t('transactions.amount')}
               </TableHead>
-              <TableHead className="text-xs font-medium text-muted-foreground py-3 w-[160px]">
+              <TableHead className="text-xs font-medium text-muted-foreground py-3 w-[190px]">
                 {t('import.category')}
               </TableHead>
               <TableHead className="text-xs font-medium text-muted-foreground py-3 pr-4 w-[90px]">
@@ -211,18 +212,28 @@ export function ImportReviewTable({
                     {tx.type === 'credit' ? '+' : '−'}{formatCurrency(Math.abs(Number(tx.amount)), userCurrency, locale)}
                   </TableCell>
                   <TableCell className="py-2.5">
-                    <CategorySelect
-                      value={tx.selected_category_id !== undefined
-                        ? (tx.selected_category_id ?? '')
-                        : (tx.suggested_category_id ?? '')}
-                      onChange={(v) => onChangeCategory(tx._id, v || null)}
-                      categories={categories}
-                      groups={groups}
-                      placeholder={t('import.noCategory')}
-                      allowNone
-                      creatable
-                      className="w-full border border-border rounded-md px-2 py-1 text-xs bg-card focus:outline-none focus-visible:ring-ring/30 focus-visible:ring-[2px]"
-                    />
+                    <div className="space-y-1.5">
+                      <CategorySelect
+                        value={tx.selected_category_id !== undefined
+                          ? (tx.selected_category_id ?? '')
+                          : (tx.suggested_category_id ?? '')}
+                        onChange={(v) => onChangeCategory(tx._id, v || null)}
+                        categories={categories}
+                        groups={groups}
+                        placeholder={t('import.noCategory')}
+                        allowNone
+                        creatable
+                        className="w-full border border-border rounded-md px-2 py-1 text-xs bg-card focus:outline-none focus-visible:ring-ring/30 focus-visible:ring-[2px]"
+                      />
+                      <IdentifyCategoryButton
+                        description={tx.description}
+                        payee={tx.payee_raw}
+                        bankCategory={tx.category_name}
+                        direction={tx.type}
+                        disabled={tx.excluded}
+                        onIdentified={(categoryId) => onChangeCategory(tx._id, categoryId)}
+                      />
+                    </div>
                   </TableCell>
                   <TableCell className="py-2.5 pr-4">
                     {tx.excluded ? (

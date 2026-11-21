@@ -71,4 +71,5 @@ celery_app.conf.include = [
     # Optional agents module — registering the import is harmless when
     # AGENTS_ENABLED=false (the task just won't be dispatched).
     "app.agents.tasks.ingest",
+    "app.tasks.transaction_categorization_tasks",
 ]

@@ -13,6 +13,7 @@ const auth = vi.hoisted(() => ({
   login: vi.fn(),
   verify2fa: vi.fn(),
   register: vi.fn(),
+  logout: vi.fn(),
 }))
 vi.mock('@/lib/api', () => ({ auth }))
 
@@ -43,6 +44,7 @@ async function renderAuth() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  auth.logout.mockResolvedValue(undefined)
   localStorage.clear()
 })
 
@@ -70,13 +72,29 @@ describe('AuthProvider session restore', () => {
     // An expired or revoked token must not leave the app in a half-signed-in
     // state where every request 401s.
     localStorage.setItem('token', 'expired-jwt')
-    auth.me.mockRejectedValue(new Error('401'))
+    auth.me.mockRejectedValue({ isAxiosError: true, response: { status: 401 } })
 
     const { result } = await renderAuth()
 
     expect(result.current.token).toBeNull()
     expect(result.current.user).toBeNull()
     expect(localStorage.getItem('token')).toBeNull()
+  })
+
+  it('keeps the session through a connection failure and retries on reconnect', async () => {
+    localStorage.setItem('token', 'stored-session')
+    auth.me.mockRejectedValueOnce(new Error('Network Error')).mockResolvedValue(USER)
+
+    const { result } = await renderAuth()
+    expect(result.current.sessionUnavailable).toBe(true)
+    expect(localStorage.getItem('token')).toBe('stored-session')
+    expect(result.current.user).toBeNull()
+
+    act(() => { window.dispatchEvent(new Event('online')) })
+
+    await waitFor(() => expect(result.current.user).toEqual(USER))
+    expect(result.current.sessionUnavailable).toBe(false)
+    expect(auth.me).toHaveBeenLastCalledWith('stored-session')
   })
 })
 
@@ -211,10 +229,11 @@ describe('logout', () => {
     const { result } = await renderAuth()
     await waitFor(() => expect(result.current.user).toEqual(USER))
 
-    act(() => {
-      result.current.logout()
+    await act(async () => {
+      await result.current.logout()
     })
 
+    expect(auth.logout).toHaveBeenCalledWith('jwt')
     expect(localStorage.getItem('token')).toBeNull()
     expect(result.current.token).toBeNull()
     expect(result.current.user).toBeNull()
@@ -246,11 +265,22 @@ describe('logout', () => {
     await waitFor(() => expect(result.current.user).toEqual(USER))
     expect(queryClient.getQueryData(['accounts'])).toBeDefined()
 
-    act(() => {
-      result.current.logout()
+    await act(async () => {
+      await result.current.logout()
     })
 
     expect(queryClient.getQueryData(['accounts'])).toBeUndefined()
+  })
+
+  it('retains the token when the server cannot confirm logout', async () => {
+    localStorage.setItem('token', 'session')
+    auth.me.mockResolvedValue(USER)
+    auth.logout.mockRejectedValueOnce(new Error('Network Error'))
+
+    const { result } = await renderAuth()
+    await expect(result.current.logout()).rejects.toThrow('Network Error')
+    expect(localStorage.getItem('token')).toBe('session')
+    expect(result.current.user).toEqual(USER)
   })
 })
 
@@ -281,6 +311,7 @@ describe('cross-tab sync', () => {
     await waitFor(() => expect(result.current.user).toEqual(USER))
 
     act(() => {
+      localStorage.removeItem('token')
       window.dispatchEvent(
         new StorageEvent('storage', { key: 'token', newValue: null }),
       )

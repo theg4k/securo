@@ -15,7 +15,7 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy import func, select, update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import UserManager, get_jwt_strategy, get_user_manager
+from app.core.auth import UserManager, get_session_strategy, get_user_manager
 from app.core.config import get_settings
 from app.core.database import get_async_session
 from app.core.redis import get_redis
@@ -388,6 +388,6 @@ async def oidc_callback(
     user = await _get_or_create_oidc_user(claims, userinfo, discovery.get("issuer", ""), session, user_manager)
     if not user.is_active:
         raise HTTPException(status_code=403, detail="User is inactive")
-    token = await get_jwt_strategy().write_token(user)
+    token = await get_session_strategy(session).write_token(user)
     frontend_url = get_settings().frontend_url.rstrip("/")
     return RedirectResponse(f"{frontend_url}/auth/oidc/callback#access_token={token}&token_type=bearer")

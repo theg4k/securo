@@ -19,9 +19,10 @@ from app.core.workspace_context import (
 )
 from app.models.account import Account
 from app.models.transaction import Transaction
-from app.schemas.transaction import BulkAddToGroupRequest, BulkCategorizeRequest, DescriptionSuggestion, BulkTagsRequest, CreateCounterpartRequest, InstallmentSeriesCreate, LinkTransferRequest, TransactionBulkDeleteRequest, TransactionCreate, TransactionRead, TransactionTransferCounterpart, TransactionUpdate, TransferCreate, TransferRead
+from app.schemas.transaction import BulkAddToGroupRequest, BulkCategorizeRequest, DescriptionSuggestion, IdentifyCategoryRequest, IdentifyCategoryResponse, BulkTagsRequest, CreateCounterpartRequest, InstallmentSeriesCreate, LinkTransferRequest, TransactionBulkDeleteRequest, TransactionCreate, TransactionRead, TransactionTransferCounterpart, TransactionUpdate, TransferCreate, TransferRead
 from app.schemas.transaction_calendar import TransactionCalendarResponse
 from app.services import transaction_service
+from app.services.transaction_categorization_service import identify_transaction_category
 from app.services.admin_service import get_credit_card_accounting_mode
 from app.services.transaction_calendar_service import get_transaction_calendar
 
@@ -249,6 +250,49 @@ async def description_suggestions(
 ):
     """Descriptions used before in this workspace that contain ``q``."""
     return await transaction_service.suggest_descriptions(session, ctx.workspace.id, q, limit)
+
+
+@router.post("/identify-category", response_model=IdentifyCategoryResponse)
+async def identify_category(
+    data: IdentifyCategoryRequest,
+    ctx: WorkspaceContext = Depends(current_writable_workspace),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Return an LLM suggestion for exactly the supplied transaction text.
+
+    This endpoint does not change a transaction or create a categorization
+    rule. The client applies the returned category to the one item being edited.
+    """
+    bank_category = data.bank_category
+    if data.transaction_id:
+        transaction = await transaction_service.get_transaction(
+            session, data.transaction_id, ctx.workspace.id
+        )
+        if transaction is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Transaction not found",
+            )
+        if transaction.source == "sync" and isinstance(transaction.raw_data, dict):
+            raw_category = transaction.raw_data.get("category")
+            if isinstance(raw_category, str):
+                bank_category = raw_category
+
+    category, confidence = await identify_transaction_category(
+        session,
+        user_id=ctx.user_id,
+        workspace_id=ctx.workspace.id,
+        description=data.description,
+        payee=data.payee,
+        bank_category=bank_category,
+        direction=data.direction,
+    )
+    await session.commit()
+    return IdentifyCategoryResponse(
+        category_id=category.id if category else None,
+        category_name=category.name if category else None,
+        confidence=confidence,
+    )
 
 
 @router.get("/export")

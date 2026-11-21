@@ -25,7 +25,7 @@ from webauthn.helpers.structs import (
     UserVerificationRequirement,
 )
 
-from app.core.auth import current_active_user, get_jwt_strategy
+from app.core.auth import current_active_user, get_session_strategy
 from app.core.auth_policy import require_local_auth_enabled
 from app.core.config import get_settings
 from app.core.database import get_async_session
@@ -396,8 +396,7 @@ async def verify_passkey_authentication(
         session=session,
     )
 
-    strategy = get_jwt_strategy()
-    token = await strategy.write_token(user)
+    token = await get_session_strategy(session).write_token(user)
     return {"access_token": token, "token_type": "bearer"}
 
 
@@ -475,6 +474,5 @@ async def verify_passkey_second_factor(
     )
     await _delete_second_factor_temp_token(body.temp_token)
 
-    strategy = get_jwt_strategy()
-    token = await strategy.write_token(user)
+    token = await get_session_strategy(session).write_token(user)
     return {"access_token": token, "token_type": "bearer"}

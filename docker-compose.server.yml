@@ -35,7 +35,8 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_APP_BASE_PATH: "${VITE_APP_BASE_PATH:-/finance/}"
+        VITE_APP_BASE_PATH: "${VITE_APP_BASE_PATH:-/}"
+        FRONTEND_URL: *server-frontend-url
     pull_policy: never
     ports: !override
       - "127.0.0.1:3000:8080"

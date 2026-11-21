@@ -24,7 +24,6 @@ class Settings(BaseSettings):
     secret_key: SecretStr = SecretStr("change-me-in-production")
     local_auth_enabled: bool = True
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60 * 24  # 24 hours
 
     # Pluggy
     pluggy_client_id: str = ""

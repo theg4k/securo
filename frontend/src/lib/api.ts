@@ -119,7 +119,7 @@ export const WORKSPACE_STORAGE_KEY = 'workspace_id'
 // Add auth token + active workspace header to requests
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
-  if (token) {
+  if (token && !config.headers.has('Authorization')) {
     config.headers.Authorization = `Bearer ${token}`
   }
   const workspaceId = localStorage.getItem(WORKSPACE_STORAGE_KEY)
@@ -132,8 +132,15 @@ api.interceptors.request.use((config) => {
 // Handle auth errors
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
+  (error: unknown) => {
+    const token = localStorage.getItem('token')
+    if (
+      token &&
+      axios.isAxiosError(error) &&
+      error.response?.status === 401 &&
+      !error.config?.skipAuthRedirect &&
+      error.config?.headers.get('Authorization') === `Bearer ${token}`
+    ) {
       localStorage.removeItem('token')
       window.location.href = appPaths.route('/login')
     }
@@ -146,6 +153,7 @@ declare module 'axios' {
     /** Set on POSTs that only read (previews, sign-in, tokens, tests) so
      * they do not tell other tabs that data changed. */
     skipDataChanged?: boolean
+    skipAuthRedirect?: boolean
   }
 }
 
@@ -252,9 +260,20 @@ export const auth = {
     const { data } = await api.post('/auth/register', { email, password, preferences })
     return data
   },
-  me: async (): Promise<User> => {
-    const { data } = await api.get('/users/me')
+  me: async (token?: string): Promise<User> => {
+    const { data } = await api.get('/users/me', token ? {
+      headers: { Authorization: `Bearer ${token}` },
+      skipAuthRedirect: true,
+      timeout: 10_000,
+    } : undefined)
     return data
+  },
+  logout: async (token: string): Promise<void> => {
+    await api.post('/auth/logout', null, {
+      ...readOnly,
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: 10_000,
+    })
   },
   updateMe: async (updates: Partial<User>): Promise<User> => {
     const { data } = await api.patch('/users/me', updates)
@@ -643,6 +662,20 @@ export const transactions = {
       transaction_ids: transactionIds,
       category_id: categoryId,
     })
+    return data
+  },
+  identifyCategory: async (transaction: {
+    transaction_id?: string
+    description: string
+    payee?: string | null
+    bank_category?: string | null
+    direction: 'debit' | 'credit'
+  }): Promise<{
+    category_id: string | null
+    category_name: string | null
+    confidence: number | null
+  }> => {
+    const { data } = await api.post('/transactions/identify-category', transaction)
     return data
   },
   bulkAddTags: async (transactionIds: string[], tags: string[]): Promise<{ updated: number }> => {
@@ -1714,7 +1747,7 @@ export const admin = {
     const { data } = await api.get('/admin/date-format')
     return data
   },
-  defaultColors: async (): Promise<{ light: string | null; dark: string | null }> => {
+  defaultColors: async (): Promise<{ dark: string | null }> => {
     const { data } = await api.get('/admin/default-colors')
     return data
   },

@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useTheme } from 'next-themes'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { admin as adminApi, currencies as currenciesApi } from '@/lib/api'
 import { resolveDisplayLocale, resolveDateLocale, type NumberFormat, type DateFormat } from '@/lib/format'
@@ -30,7 +29,7 @@ import {
 } from '@/components/ui/select'
 import { PageHeader } from '@/components/page-header'
 import { TimezoneSettings } from '@/components/timezone-settings'
-import { setThemeBasedOnSystem } from '@/lib/theme-utils'
+import { DEFAULT_THEME_COLOR, normalizeThemeColor, setThemeColor } from '@/lib/theme-utils'
 import { useLocalAuthEnabled } from '@/hooks/use-local-auth'
 import { Search, Plus, Trash2, Shield, ShieldOff, UserCog, Users, Scale, Tag, Palette, Save, Hash, CalendarDays } from 'lucide-react'
 import type { AdminUser } from '@/types'
@@ -39,7 +38,6 @@ export default function AdminSettingsPage() {
   const { t, i18n } = useTranslation()
   const { user: currentUser } = useAuth()
   const queryClient = useQueryClient()
-  const { resolvedTheme } = useTheme()
 
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
@@ -58,10 +56,8 @@ export default function AdminSettingsPage() {
   const [editPassword, setEditPassword] = useState('')
   const [showPasswordField, setShowPasswordField] = useState(false)
 
-  const [lastSyncedLight, setLastSyncedLight] = useState<string | undefined>()
   const [lastSyncedDark, setLastSyncedDark] = useState<string | undefined>()
-  const [localLight, setLocalLight] = useState<string>('#6366F1')
-  const [localDark, setLocalDark] = useState<string>('#818CF8')
+  const [localDark, setLocalDark] = useState<string>(DEFAULT_THEME_COLOR)
 
   const { data: usersData, isLoading: usersLoading } = useQuery({
     queryKey: ['admin', 'users', search],
@@ -125,12 +121,6 @@ export default function AdminSettingsPage() {
   })
 
   // Theme color settings
-  const { data: themeColorLightSetting } = useQuery({
-    queryKey: ['admin', 'settings', 'theme_color_light'],
-    queryFn: () => adminApi.getSetting('theme_color_light').catch(() => null),
-    retry: false,
-  })
-
   const { data: themeColorDarkSetting } = useQuery({
     queryKey: ['admin', 'settings', 'theme_color_dark'],
     queryFn: () => adminApi.getSetting('theme_color_dark').catch(() => null),
@@ -228,25 +218,18 @@ export default function AdminSettingsPage() {
     },
   })
 
-  if (themeColorLightSetting?.value && themeColorLightSetting.value !== lastSyncedLight) {
-    setLastSyncedLight(themeColorLightSetting.value)
-    setLocalLight(themeColorLightSetting.value)
-  }
   if (themeColorDarkSetting?.value && themeColorDarkSetting.value !== lastSyncedDark) {
     setLastSyncedDark(themeColorDarkSetting.value)
-    setLocalDark(themeColorDarkSetting.value)
+    setLocalDark(normalizeThemeColor(themeColorDarkSetting.value))
   }
 
   const saveColorsMutation = useMutation({
     mutationFn: async () => {
-      await Promise.all([
-        adminApi.updateSetting('theme_color_light', localLight),
-        adminApi.updateSetting('theme_color_dark', localDark),
-      ])
+      await adminApi.updateSetting('theme_color_dark', localDark)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
-      setThemeBasedOnSystem(localLight, localDark, resolvedTheme)
+      setThemeColor(localDark)
       toast.success(t('admin.settings.updated'))
     },
     onError: () => {
@@ -388,27 +371,7 @@ export default function AdminSettingsPage() {
               {saveColorsMutation.isPending ? t('common.loading') : t('common.save')}
             </Button>
           </div>
-          <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Light Mode Colors */}
-            <div className="space-y-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                {t('settings.lightMode')}
-              </p>
-              <div className="space-y-1.5">
-                <Label className="text-xs">{t('settings.themeColor')}</Label>
-                <div className="flex items-center gap-2">
-                  <Input 
-                    type="color" 
-                    className="w-12 h-9 p-1 cursor-pointer" 
-                    value={localLight}
-                    onChange={(e) => setLocalLight(e.target.value)}
-                  />
-                  <span className="text-xs font-mono text-muted-foreground">{localLight}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Dark Mode Colors */}
+          <div className="p-5">
             <div className="space-y-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                 {t('settings.darkMode')}

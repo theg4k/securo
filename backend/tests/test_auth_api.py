@@ -1,7 +1,10 @@
+from hashlib import sha256
+
 import pytest
 from httpx import AsyncClient
 
-from app.core.auth import get_jwt_strategy
+from app.core.auth import get_session_strategy
+from app.models.user_session import UserSession
 
 
 @pytest.mark.asyncio
@@ -37,6 +40,28 @@ async def test_login(client: AsyncClient, test_user):
     data = response.json()
     assert "access_token" in data
     assert data["token_type"] == "bearer"
+
+
+async def test_logout_revokes_only_the_current_session(client: AsyncClient, test_user, session):
+    credentials = {"username": "test@example.com", "password": "testpass123"}
+    first = await client.post("/api/auth/login", data=credentials)
+    second = await client.post("/api/auth/login", data=credentials)
+    assert first.status_code == second.status_code == 200
+    token = first.json()["access_token"]
+    other_token = second.json()["access_token"]
+    assert token != other_token
+
+    stored = await session.get(UserSession, sha256(token.encode()).hexdigest())
+    assert stored is not None
+    assert stored.user_id == test_user.id
+    headers = {"Authorization": f"Bearer {token}"}
+    assert (await client.get("/api/users/me", headers=headers)).status_code == 200
+    assert (await client.post("/api/auth/logout", headers=headers)).status_code == 200
+    assert (await client.get("/api/users/me", headers=headers)).status_code == 401
+    assert (await client.post("/api/auth/logout", headers=headers)).status_code == 200
+    assert (
+        await client.get("/api/users/me", headers={"Authorization": f"Bearer {other_token}"})
+    ).status_code == 200
 
 
 @pytest.mark.asyncio
@@ -119,9 +144,10 @@ async def test_password_reset_forbidden_when_local_auth_disabled(
 async def test_self_password_update_forbidden_when_local_auth_disabled(
     client: AsyncClient,
     test_user,
+    session,
     oidc_only_settings,
 ):
-    token = await get_jwt_strategy().write_token(test_user)
+    token = await get_session_strategy(session).write_token(test_user)
     response = await client.patch(
         "/api/users/me",
         json={"password": "replacement123"},
@@ -136,9 +162,10 @@ async def test_self_password_update_forbidden_when_local_auth_disabled(
 async def test_profile_update_allowed_when_local_auth_disabled(
     client: AsyncClient,
     test_user,
+    session,
     oidc_only_settings,
 ):
-    token = await get_jwt_strategy().write_token(test_user)
+    token = await get_session_strategy(session).write_token(test_user)
     response = await client.patch(
         "/api/users/me",
         json={"preferences": {"language": "en"}},

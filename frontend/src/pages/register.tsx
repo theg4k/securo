@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useTheme } from 'next-themes'
 import { useAuth } from '@/contexts/auth-context'
 import { admin as adminApi, auth as authApi } from '@/lib/api'
 import { resolveSupportedLang } from '@/lib/i18n'
@@ -10,8 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { CurrencySelect } from '@/components/currency-select'
-import { ShellLogo } from '@/components/shell-logo'
-import { setThemeBasedOnSystem } from '@/lib/theme-utils'
+import { ShellWordmark } from '@/components/shell-logo'
+import { setThemeColor } from '@/lib/theme-utils'
 import { isServerUnreachable } from '@/lib/auth-errors'
 import type { AxiosError } from 'axios'
 
@@ -19,7 +18,6 @@ export default function RegisterPage() {
   const { t, i18n } = useTranslation()
   const { register } = useAuth()
   const navigate = useNavigate()
-  const { resolvedTheme } = useTheme()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -43,13 +41,13 @@ export default function RegisterPage() {
     }).catch(() => {
       if (active) setChecking(false)
     })
-    adminApi.defaultColors().then(({ light, dark }) => {
-      setThemeBasedOnSystem(light, dark, resolvedTheme)
+    adminApi.defaultColors().then(({ dark }) => {
+      setThemeColor(dark)
     }).catch(() => {})
     return () => {
       active = false
     }
-  }, [navigate, resolvedTheme])
+  }, [navigate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -100,9 +98,7 @@ export default function RegisterPage() {
       <Card className="w-full max-w-[400px] shadow-sm">
         <form onSubmit={handleSubmit}>
           <div className="flex flex-col items-center pt-8 pb-2 px-8">
-            <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
-              <ShellLogo size={22} className="text-primary" />
-            </div>
+            <ShellWordmark height={28} className="mb-4" />
             <h1 className="text-xl font-semibold tracking-tight">{t('auth.register')}</h1>
             <p className="text-sm text-muted-foreground mt-1">{t('auth.registerDescription')}</p>
           </div>

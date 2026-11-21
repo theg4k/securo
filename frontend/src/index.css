@@ -6,70 +6,39 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: #F8F9FB;
-  --foreground: #0F172A;
-  --card: #FFFFFF;
-  --card-foreground: #0F172A;
-  --popover: #FFFFFF;
-  --popover-foreground: #0F172A;
-  --primary: #6366F1;
-  --primary-foreground: #FFFFFF;
-  --secondary: #F1F5F9;
-  --secondary-foreground: #0F172A;
-  --muted: #F1F5F9;
-  --muted-foreground: #64748B;
-  --accent: #EEF2FF;
-  --accent-foreground: #4F46E5;
+  --background: #0A0A0A;
+  --foreground: #F0F0F5;
+  --card: #111111;
+  --card-foreground: #F0F0F5;
+  --popover: #111111;
+  --popover-foreground: #F0F0F5;
+  --primary: #EC4899;
+  --primary-foreground: #0C0D12;
+  --secondary: #1D1D1D;
+  --secondary-foreground: #F0F0F5;
+  --muted: #1D1D1D;
+  --muted-foreground: #8A8F9E;
+  --accent: #2D1422;
+  --accent-foreground: #F472B6;
   --destructive: #F43F5E;
-  --destructive-foreground: #FFFFFF;
-  --border: #E8ECF1;
-  --input: #E8ECF1;
-  --ring: #6366F1;
+  --destructive-foreground: #0C0D12;
+  --border: #242424;
+  --input: #242424;
+  --ring: #EC4899;
   --radius: 0.625rem;
-  --chart-1: #6366F1;
+  --chart-1: #EC4899;
   --chart-2: #8B5CF6;
   --chart-3: #10B981;
   --chart-4: #F59E0B;
   --chart-5: #F43F5E;
-  --sidebar: #FFFFFF;
-  --sidebar-foreground: #0F172A;
-  --sidebar-primary: #6366F1;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #F1F5F9;
-  --sidebar-accent-foreground: #4F46E5;
-  --sidebar-border: #E8ECF1;
-  --sidebar-ring: #6366F1;
-  --sidebar-muted: #64748B;
-}
-
-.dark {
-  --background: #0C0D12;
-  --foreground: #F0F0F5;
-  --card: #16171F;
-  --card-foreground: #F0F0F5;
-  --popover: #16171F;
-  --popover-foreground: #F0F0F5;
-  --primary: #818CF8;
-  --primary-foreground: #FFFFFF;
-  --secondary: #252836;
-  --secondary-foreground: #F0F0F5;
-  --muted: #252836;
-  --muted-foreground: #8A8F9E;
-  --accent: #1E1B4B;
-  --accent-foreground: #A5B4FC;
-  --destructive: #FB7185;
-  --destructive-foreground: #0C0D12;
-  --border: #2A2D3A;
-  --input: #2A2D3A;
-  --ring: #818CF8;
-  --sidebar: #16171F;
+  --sidebar: #111111;
   --sidebar-foreground: #F0F0F5;
-  --sidebar-primary: #818CF8;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #252836;
-  --sidebar-accent-foreground: #A5B4FC;
-  --sidebar-border: #2A2D3A;
-  --sidebar-ring: #818CF8;
+  --sidebar-primary: #EC4899;
+  --sidebar-primary-foreground: #0C0D12;
+  --sidebar-accent: #2D1422;
+  --sidebar-accent-foreground: #F472B6;
+  --sidebar-border: #242424;
+  --sidebar-ring: #EC4899;
   --sidebar-muted: #8A8F9E;
 }
 
@@ -162,8 +131,8 @@
   animation: securo-highlight-flash 2.4s ease-out;
 }
 
-/* Soft ambient aurora for the auth brand panel. Drifting, blurred purple
-   blobs over a deep indigo base — slow enough to feel alive, not busy.
+/* Soft ambient aurora for the auth brand panel. Drifting, blurred brand
+   colors over a charcoal base — slow enough to feel alive, not busy.
    Only transform/opacity animate, never layout. */
 @keyframes securo-aurora-1 {
   0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
@@ -190,7 +159,7 @@
   width: 62%;
   height: 62%;
   opacity: 0.55;
-  background: radial-gradient(circle at center, #818cf8 0%, transparent 70%);
+  background: radial-gradient(circle at center, #ec4899 0%, transparent 70%);
   animation: securo-aurora-1 24s ease-in-out infinite;
 }
 .securo-aurora-2 {
@@ -199,7 +168,7 @@
   width: 68%;
   height: 68%;
   opacity: 0.5;
-  background: radial-gradient(circle at center, #a78bfa 0%, transparent 70%);
+  background: radial-gradient(circle at center, #a855f7 0%, transparent 70%);
   animation: securo-aurora-2 29s ease-in-out infinite;
 }
 .securo-aurora-3 {
@@ -208,7 +177,7 @@
   width: 46%;
   height: 46%;
   opacity: 0.4;
-  background: radial-gradient(circle at center, #c4b5fd 0%, transparent 70%);
+  background: radial-gradient(circle at center, #f59e0b 0%, transparent 70%);
   animation: securo-aurora-3 33s ease-in-out infinite;
 }
 

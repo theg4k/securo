@@ -10,7 +10,7 @@ import pyotp
 import pytest
 from sqlalchemy import select
 
-from app.core.auth import get_jwt_strategy
+from app.core.auth import get_session_strategy
 from app.models.passkey import UserPasskey
 
 
@@ -22,7 +22,7 @@ async def test_disabled_local_auth_cleanup_requires_both_factors(
     test_user.totp_secret = secret
     test_user.is_2fa_enabled = True
     await session.commit()
-    token = await get_jwt_strategy().write_token(test_user)
+    token = await get_session_strategy(session).write_token(test_user)
     totp = pyotp.TOTP(secret)
     now = datetime.now(timezone.utc)
     # Pick a six-digit code outside every accepted window, without a rare collision.
@@ -61,7 +61,7 @@ async def test_disabled_local_auth_passkey_cleanup_is_owner_scoped(
     )
     session.add_all([own, other])
     await session.commit()
-    token = await get_jwt_strategy().write_token(test_user)
+    token = await get_session_strategy(session).write_token(test_user)
     headers = {"Authorization": f"Bearer {token}"}
 
     assert (await client.get("/api/auth/passkeys")).status_code == 401

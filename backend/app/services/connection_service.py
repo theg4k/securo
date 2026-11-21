@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import re
+import unicodedata
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -20,6 +21,7 @@ from app.models.asset_value import AssetValue
 from app.models.bank_connection import BankConnection
 from app.models.account import Account
 from app.models.category import Category
+from app.models.category_group import CategoryGroup
 from app.models.institution import Institution
 from app.models.goal import Goal
 from app.models.collection import collection_asset_groups
@@ -50,6 +52,10 @@ from app.services.asset_group_service import (
     ensure_group_for_connection,
 )
 from app.services.credit_card_service import apply_effective_date
+from app.services.category_defaults import DEFAULT_CATEGORIES, name_variants
+from app.services.transaction_categorization_service import (
+    dispatch_transaction_categorization,
+)
 from app.services.rule_engine import merge_notes
 from app.services.rule_service import apply_rules_to_transaction, preview_rules_for_transaction
 from app.services.transfer_detection_service import detect_transfer_pairs
@@ -214,29 +220,74 @@ async def _resolve_institution(
     return inst
 
 PLUGGY_CATEGORY_MAP = {
-    "Eating out": "Alimentação",
-    "Restaurants": "Alimentação",
-    "Food": "Alimentação",
-    "Groceries": "Mercado",
-    "Supermarkets": "Mercado",
-    "Pharmacy": "Saúde",
-    "Health": "Saúde",
-    "Taxi and ride-hailing": "Transporte",
-    "Transport": "Transporte",
-    "Gas": "Transporte",
-    "Travel": "Transporte",
-    "Housing": "Moradia",
-    "Rent": "Moradia",
-    "Utilities": "Moradia",
-    "Entertainment": "Lazer",
-    "Leisure": "Lazer",
-    "Education": "Educação",
-    "Subscriptions": "Assinaturas",
-    "Online services": "Assinaturas",
-    "Transfer": "Transferências",
-    "Transfers": "Transferências",
-    "Wire transfers": "Transferências",
+    # Values are stable keys from DEFAULT_CATEGORIES, never localized display
+    # names. Pluggy emits English labels even when the workspace's category
+    # names were seeded in another language.
+    "Eating out": "food",
+    "Restaurants": "food",
+    "Food": "food",
+    "Food delivery": "food",
+    "Groceries": "groceries",
+    "Supermarkets": "groceries",
+    "Pharmacy": "health",
+    "Health": "health",
+    "Healthcare": "health",
+    "Wellness and fitness": "health",
+    "Taxi and ride-hailing": "transport",
+    "Transport": "transport",
+    "Gas": "transport",
+    "Gas stations": "transport",
+    "Travel": "transport",
+    "Housing": "housing",
+    "Rent": "housing",
+    "Utilities": "housing",
+    "Electricity": "housing",
+    "Entertainment": "leisure",
+    "Leisure": "leisure",
+    "Cinema, theater and concerts": "leisure",
+    "Education": "education",
+    "Subscriptions": "subscriptions",
+    "Online services": "subscriptions",
+    "Digital services": "subscriptions",
+    "Video streaming": "subscriptions",
+    "Transfer": "transfers",
+    "Transfers": "transfers",
+    "Wire transfers": "transfers",
+    "Same person transfer": "transfers",
+    "Credit card payment": "transfers",
+    "Shopping": "shopping",
+    "Online shopping": "shopping",
+    "Clothing": "shopping",
+    "Electronics": "shopping",
+    "Bookstore": "shopping",
+    "Tax on financial operations": "taxes",
+    # Pluggy also returns some already-localized Brazilian labels.
+    "Alimentação": "food",
+    "Mercado": "groceries",
+    "Saúde": "health",
+    "Transporte": "transport",
+    "Moradia": "housing",
+    "Lazer": "leisure",
+    "Educação": "education",
+    "Assinaturas": "subscriptions",
+    "Transferências": "transfers",
+    "Compras": "shopping",
+    "Impostos & Taxas": "taxes",
 }
+
+
+def _normalize_pluggy_category(value: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", value)
+    without_marks = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return re.sub(r"\s+", " ", without_marks).strip().casefold()
+
+
+_NORMALIZED_PLUGGY_CATEGORY_MAP = {
+    _normalize_pluggy_category(label): category_key
+    for label, category_key in PLUGGY_CATEGORY_MAP.items()
+}
+
+_PROVIDER_CATEGORY_MAPPING_VERSION = 1
 
 
 def _sync_assets_enabled(settings: Optional[dict]) -> bool:
@@ -1037,6 +1088,7 @@ async def _match_pluggy_category(
     workspace_id: uuid.UUID,
     pluggy_category: Optional[str],
     enabled: bool = True,
+    category_cache: Optional[dict[str, Optional[uuid.UUID]]] = None,
 ) -> Optional[uuid.UUID]:
     # `enabled` is the resolved value of the global `use_provider_categories`
     # admin setting. Off = sync skips the provider->user category mapping
@@ -1045,10 +1097,17 @@ async def _match_pluggy_category(
     if not enabled or not pluggy_category:
         return None
     # Try exact match first, then prefix before " - " (e.g. "Transfer - PIX" → "Transfer")
-    app_name = PLUGGY_CATEGORY_MAP.get(pluggy_category)
-    if not app_name and " - " in pluggy_category:
-        app_name = PLUGGY_CATEGORY_MAP.get(pluggy_category.split(" - ")[0])
-    if not app_name:
+    normalized_label = _normalize_pluggy_category(pluggy_category)
+    if category_cache is not None and normalized_label in category_cache:
+        return category_cache[normalized_label]
+    category_key = _NORMALIZED_PLUGGY_CATEGORY_MAP.get(normalized_label)
+    if category_key is None and " - " in pluggy_category:
+        prefix = _normalize_pluggy_category(pluggy_category.split(" - ", 1)[0])
+        category_key = _NORMALIZED_PLUGGY_CATEGORY_MAP.get(prefix)
+    category_data = DEFAULT_CATEGORIES.get(category_key) if category_key else None
+    if category_data is None:
+        if category_cache is not None:
+            category_cache[normalized_label] = None
         return None
     # Scope to the connection's workspace: a user in multiple workspaces owns
     # the same default category names in each, so a user_id-only lookup returns
@@ -1056,10 +1115,57 @@ async def _match_pluggy_category(
     # never crash the whole sync even if a workspace somehow has name dupes.
     result = await session.execute(
         select(Category.id)
-        .where(Category.workspace_id == workspace_id, Category.name == app_name)
+        .outerjoin(CategoryGroup, Category.group_id == CategoryGroup.id)
+        .where(
+            Category.workspace_id == workspace_id,
+            Category.name.in_(name_variants(category_data)),
+            Category.is_hidden.is_(False),
+            or_(Category.group_id.is_(None), CategoryGroup.is_hidden.is_(False)),
+        )
+        .order_by(Category.is_system.desc(), Category.id)
         .limit(1)
     )
-    return result.scalars().first()
+    category_id = result.scalars().first()
+    if category_cache is not None:
+        category_cache[normalized_label] = category_id
+    return category_id
+
+
+async def _backfill_uncategorized_provider_categories(
+    session: AsyncSession,
+    workspace_id: uuid.UUID,
+    account_id: uuid.UUID,
+    category_cache: dict[str, Optional[uuid.UUID]],
+) -> int:
+    """Categorize existing sync rows when their bank supplied a known label.
+
+    Only currently uncategorized rows are touched, so assigned categories are
+    never overwritten. The caller runs this once per connection after the
+    mapping version changes.
+    """
+    result = await session.execute(
+        select(Transaction).where(
+            Transaction.workspace_id == workspace_id,
+            Transaction.account_id == account_id,
+            Transaction.source == "sync",
+            Transaction.category_id.is_(None),
+            Transaction.raw_data.is_not(None),
+        )
+    )
+    updated = 0
+    for transaction in result.scalars():
+        raw_data = transaction.raw_data
+        provider_category = raw_data.get("category") if isinstance(raw_data, dict) else None
+        category_id = await _match_pluggy_category(
+            session,
+            workspace_id,
+            provider_category,
+            category_cache=category_cache,
+        )
+        if category_id is not None:
+            transaction.category_id = category_id
+            updated += 1
+    return updated
 
 
 def _bank_converted_amount(
@@ -1353,8 +1459,10 @@ async def handle_oauth_callback(
     user = await session.get(User, user_id)
     user_currency = user.primary_currency if user else get_settings().default_currency
     new_tx_ids: list[uuid.UUID] = []
+    ai_category_candidate_ids: list[uuid.UUID] = []
 
     use_provider_cats = await admin_service.use_provider_categories(session)
+    provider_category_cache: dict[str, Optional[uuid.UUID]] = {}
 
     # Holdings are fetched before the accounts so each account balance knows
     # whether its auto-invested portion is counted as an asset (issue #843).
@@ -1462,6 +1570,7 @@ async def handle_oauth_callback(
                     workspace_id,
                     txn_data.pluggy_category,
                     enabled=use_provider_cats,
+                    category_cache=provider_category_cache,
                 )
             # Resolve payee entity from raw payee text
             payee_id = None
@@ -1508,6 +1617,8 @@ async def handle_oauth_callback(
             await apply_rules_to_transaction(session, user_id, transaction)
             if transaction.category_id is None:
                 transaction.category_id = category_id
+            if transaction.category_id is None:
+                ai_category_candidate_ids.append(transaction.id)
 
             acct_currency = acc_data.currency or user_currency
             await _stamp_synced_primary_amount(
@@ -1550,6 +1661,13 @@ async def handle_oauth_callback(
 
     connection.last_sync_at = datetime.now(timezone.utc)
     await session.commit()
+    if use_provider_cats:
+        dispatch_transaction_categorization(
+            ai_category_candidate_ids,
+            user_id=user_id,
+            workspace_id=workspace_id,
+            provider_name=provider_name,
+        )
     await session.refresh(connection)
     return connection
 
@@ -2277,6 +2395,11 @@ async def sync_connection(
     payee_source = conn_settings.get("payee_source", "auto")
     import_pending = conn_settings.get("import_pending", True)
     use_provider_cats = await admin_service.use_provider_categories(session)
+    provider_category_backfill_needed = (
+        use_provider_cats
+        and conn_settings.get("provider_category_mapping_version")
+        != _PROVIDER_CATEGORY_MAPPING_VERSION
+    )
 
     # Resolve the provider before the error-handling block: an unregistered
     # provider is a server misconfiguration, and the catch-all below would
@@ -2336,9 +2459,11 @@ async def sync_connection(
         user = await session.get(User, user_id)
         user_currency = user.primary_currency if user else get_settings().default_currency
         new_tx_ids: list[uuid.UUID] = []
+        ai_category_candidate_ids: list[uuid.UUID] = []
         merged_count = 0
         live_txn_external_ids: dict[uuid.UUID, set[str]] = {}
         incomplete_fetch_account_ids: set[uuid.UUID] = set()
+        provider_category_cache: dict[str, Optional[uuid.UUID]] = {}
         accounts_data = await provider.get_accounts(credentials)
         incoming_external_ids = {acc.external_id for acc in accounts_data}
         incoming_institution_external_ids = frozenset(
@@ -2630,6 +2755,7 @@ async def sync_connection(
                         workspace_id,
                         txn_data.pluggy_category,
                         enabled=use_provider_cats,
+                        category_cache=provider_category_cache,
                     )
 
                 sync_payee_id = None
@@ -2719,6 +2845,8 @@ async def sync_connection(
                         )
                     if placeholder.category_id is None:
                         placeholder.category_id = preview.category_id or category_id
+                    if placeholder.category_id is None:
+                        ai_category_candidate_ids.append(placeholder.id)
                     if txn_data.payee and not placeholder.payee:
                         placeholder.payee = txn_data.payee
                     if placeholder.payee_id is None:
@@ -2756,6 +2884,8 @@ async def sync_connection(
                 await apply_rules_to_transaction(session, user_id, transaction)
                 if transaction.category_id is None:
                     transaction.category_id = category_id
+                if transaction.category_id is None:
+                    ai_category_candidate_ids.append(transaction.id)
 
                 await _stamp_synced_primary_amount(
                     session, user_id, transaction, converted
@@ -2764,6 +2894,34 @@ async def sync_connection(
             # Reconcile the opening balance after any new transactions land so
             # SUM(all txs) keeps matching account.balance from the provider.
             await sync_opening_balance_for_connected_account(session, account)
+
+        if provider_category_backfill_needed:
+            backfilled_count = 0
+            account_ids = (
+                await session.execute(
+                    select(Account.id).where(
+                        Account.connection_id == connection.id,
+                        Account.workspace_id == workspace_id,
+                    )
+                )
+            ).scalars().all()
+            for account_id in account_ids:
+                backfilled_count += await _backfill_uncategorized_provider_categories(
+                    session,
+                    workspace_id,
+                    account_id,
+                    provider_category_cache,
+                )
+            connection.settings = {
+                **(connection.settings or {}),
+                "provider_category_mapping_version": _PROVIDER_CATEGORY_MAPPING_VERSION,
+            }
+            if backfilled_count:
+                logger.info(
+                    "Backfilled %d provider categories for connection %s",
+                    backfilled_count,
+                    connection.id,
+                )
 
         # Detect transfer pairs among newly synced transactions
         if new_tx_ids:
@@ -2855,6 +3013,13 @@ async def sync_connection(
         else:
             connection.status = "active"
         await session.commit()
+        if use_provider_cats:
+            dispatch_transaction_categorization(
+                ai_category_candidate_ids,
+                user_id=user_id,
+                workspace_id=workspace_id,
+                provider_name=connection.provider,
+            )
         await session.refresh(connection)
         return connection, merged_count, "refreshed"
 

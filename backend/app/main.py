@@ -50,7 +50,7 @@ from app.api.admin import router as admin_router, check_registration_enabled
 from app.core.auth import fastapi_users
 from app.core.auth_policy import require_local_auth_enabled
 from app.core.config import get_settings
-from app.core.rate_limit import login_rate_limit, register_rate_limit, password_reset_rate_limit
+from app.core.rate_limit import register_rate_limit, password_reset_rate_limit
 from app.core.redis import close_redis
 from app.schemas.user import UserCreate, UserRead, UserUpdate
 
@@ -125,12 +125,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Auth routes — custom login/logout with 2FA support (mounted first to take precedence)
+# Auth routes with password sign-in, two-factor authentication, and sign-out.
 app.include_router(
     custom_auth_router,
     prefix="/api/auth",
     tags=["auth"],
-    dependencies=[Depends(login_rate_limit)],
 )
 app.include_router(
     two_factor_router,

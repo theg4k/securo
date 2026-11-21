@@ -1,36 +1,8 @@
-import { useSyncExternalStore, useCallback } from 'react'
-
-const STORAGE_KEY = 'privacyMode'
 const MASK = '\u2022\u2022\u2022\u2022\u2022'
+const showValue = (value: string) => value
 
-const listeners = new Set<() => void>()
-
-function getSnapshot(): boolean {
-  return localStorage.getItem(STORAGE_KEY) === 'true'
-}
-
-function subscribe(cb: () => void) {
-  listeners.add(cb)
-  return () => listeners.delete(cb)
-}
-
-function notify() {
-  listeners.forEach((cb) => cb())
-}
-
+// Financial values now remain visible; this helper keeps existing display
+// components simple while the privacy toggle is removed from the app.
 export function usePrivacyMode() {
-  const privacyMode = useSyncExternalStore(subscribe, getSnapshot, () => false)
-
-  const togglePrivacyMode = useCallback(() => {
-    const next = !getSnapshot()
-    localStorage.setItem(STORAGE_KEY, String(next))
-    notify()
-  }, [])
-
-  const mask = useCallback(
-    (value: string) => (privacyMode ? MASK : value),
-    [privacyMode],
-  )
-
-  return { privacyMode, togglePrivacyMode, mask, MASK } as const
+  return { privacyMode: false, mask: showValue, MASK } as const
 }

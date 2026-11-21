@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo, lazy, Suspense } from 'react
 import { getAccountName, sidebarAccountBalance, sortAccountsByAbsoluteBalance, sumAccountsTotal } from '@/lib/account-utils'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { useDisplayLocale } from '@/hooks/use-display-locale'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/auth-context'
@@ -12,7 +13,6 @@ import { CollectionSelector } from '@/components/collection-selector'
 import { auth as authApi, admin as adminApi } from '@/lib/api'
 import { resolveSupportedLang } from '@/lib/i18n'
 import { OnboardingTour } from '@/components/onboarding-tour'
-import { useTheme } from 'next-themes'
 import { accounts as accountsApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -29,8 +29,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { APP_VERSION } from '@/lib/build-info'
-import { ShellLogo } from '@/components/shell-logo'
+import { ShellLogo, ShellWordmark } from '@/components/shell-logo'
 import { UpdateAvailableBanner } from '@/components/update-available-banner'
 import { UpdateAvailableDialog } from '@/components/update-available-dialog'
 import { WorkspaceSwitcher } from '@/components/workspace-switcher'
@@ -39,11 +38,6 @@ import {
   Menu,
   ChevronLeft,
   ChevronRight,
-  Eye,
-  EyeOff,
-  Sun,
-  Moon,
-  Monitor,
   Languages,
   KeyRound,
   Check,
@@ -62,8 +56,7 @@ import { useCommandPaletteHotkey } from '@/hooks/use-command-palette-hotkey'
 import { GlobalChatPanel } from '@/components/global-chat-panel'
 import { useFeatureFlags } from '@/hooks/use-feature-flags'
 import { Bot, Plus, Search, Sparkles } from 'lucide-react'
-import { setThemeBasedOnSystem } from '@/lib/theme-utils'
-import { nextTheme, THEME_LABEL_KEY } from '@/lib/theme-cycle'
+import { setThemeColor } from '@/lib/theme-utils'
 import { useLocalAuthEnabled } from '@/hooks/use-local-auth'
 import { formatCurrency } from '@/lib/format'
 
@@ -96,14 +89,13 @@ export function AppLayout() {
   const { activeAccountIds } = useCollectionFilter()
   const userCurrency = user?.preferences?.currency_display ?? 'USD'
   const locale = useDisplayLocale()
-  const { theme, setTheme, resolvedTheme } = useTheme()
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const { collapsed: desktopSidebarCollapsed, toggleCollapsed: toggleDesktopSidebar } = useSidebarState()
   const [accountsExpanded, setAccountsExpanded] = useState(true)
   const [accountsShowAll, setAccountsShowAll] = useState(false)
-  const { privacyMode, togglePrivacyMode, mask } = usePrivacyMode()
+  const { mask } = usePrivacyMode()
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const [twoFactorOpen, setTwoFactorOpen] = useState(false)
   const [passkeysOpen, setPasskeysOpen] = useState(false)
@@ -132,8 +124,8 @@ export function AppLayout() {
   // Gated on agentsEnabled so the hotkey is a no-op when the feature is
   // off — keeps ⌘J free for browsers/other tools.
   useEffect(() => {
-    adminApi.defaultColors().then(({ light, dark }) => {
-      setThemeBasedOnSystem(light, dark, resolvedTheme)
+    adminApi.defaultColors().then(({ dark }) => {
+      setThemeColor(dark)
     }).catch(() => {})
     
     if (!chatAvailable) return
@@ -146,7 +138,7 @@ export function AppLayout() {
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [chatAvailable, resolvedTheme])
+  }, [chatAvailable])
   // The "Agents" management page used to live in the sidebar, but it's
   // a configuration surface (KB upload, providers, default selection),
   // not a daily destination. Moved to the user menu (Change password,
@@ -179,12 +171,6 @@ export function AppLayout() {
   }, [user, updateUser])
 
   const userInitial = user?.email?.charAt(0).toUpperCase() ?? '?'
-  // The button shows, and switches to, the next theme in the cycle.
-  const upcomingTheme = nextTheme(theme)
-  const themeButtonLabel = t(THEME_LABEL_KEY[upcomingTheme])
-  const ThemeIcon = { light: Sun, dark: Moon, system: Monitor }[upcomingTheme]
-  const toggleTheme = () => setTheme(upcomingTheme)
-
   const { data: accountsList } = useQuery({
     queryKey: ['accounts'],
     queryFn: () => accountsApi.list(),
@@ -197,8 +183,6 @@ export function AppLayout() {
     ? allAccounts.filter((a) => activeAccountIds.includes(a.id))
     : allAccounts
   const totalBalance = sumAccountsTotal(visibleAccounts)
-  const versionA11yLabel = t('app.versionAriaLabel', { version: APP_VERSION })
-
   return (
     <div className="min-h-screen bg-background">
       {/* Mobile header */}
@@ -212,14 +196,11 @@ export function AppLayout() {
         </button>
         <Link
           to="/"
-          className="flex items-center gap-2 -mx-1 px-1 py-1 rounded-md hover:bg-sidebar-accent transition-colors"
+          className="flex items-center gap-2 -mx-1 px-1 py-1 rounded-md"
           aria-label={t('app.name')}
           title={t('nav.dashboard')}
         >
-          <ShellLogo size={22} className="text-primary shrink-0" />
-          <span className="font-bold text-sidebar-foreground">
-            {t('app.name')}
-          </span>
+          <ShellWordmark height={36} className="shrink-0" />
         </Link>
         <div className="ml-auto flex items-center gap-2">
           <button
@@ -230,24 +211,7 @@ export function AppLayout() {
           >
             <Search size={18} />
           </button>
-          <button
-            onClick={togglePrivacyMode}
-            className="text-sidebar-muted hover:text-sidebar-foreground transition-colors p-1"
-            title={privacyMode ? t('privacy.show') : t('privacy.hide')}
-          >
-            {privacyMode ? <EyeOff size={18} /> : <Eye size={18} />}
-          </button>
-          <button
-            onClick={toggleTheme}
-            className="text-sidebar-muted hover:text-sidebar-foreground transition-colors p-1"
-            title={themeButtonLabel}
-            aria-label={themeButtonLabel}
-          >
-            <ThemeIcon size={18} />
-          </button>
-          {/* AI chat — opens the global slide-over (also reachable via
-              ⌘J). Sits next to the theme toggle so the icon is always
-              within thumb reach on mobile too. */}
+          {/* AI chat opens the global slide-over; ⌘J is also available. */}
           {chatAvailable && (
             <button
               onClick={() => setChatOpen(true)}
@@ -295,43 +259,35 @@ export function AppLayout() {
               dedicated 'Painel' nav item so the sidebar stays focused
               on the main destinations. */}
           {/* Collapsed on desktop, the header becomes a column: logo on
-              top, then the same privacy / chat / theme buttons stacked,
+              top, then the same chat buttons stacked,
               so nothing the expanded header offers goes missing in the
               rail. */}
           <div className={cn(
-            'flex h-16 min-h-16 items-center justify-between px-5 border-b border-sidebar-border shrink-0',
+            'relative flex h-14 min-h-14 items-center justify-start px-2 border-b border-sidebar-border shrink-0',
             desktopSidebarCollapsed && 'lg:h-auto lg:min-h-0 lg:flex-col lg:justify-center lg:gap-2 lg:px-0 lg:py-3',
           )}>
             <Link
               to="/"
-              className="flex items-center gap-2.5 -mx-1 px-1 py-1 rounded-md hover:bg-sidebar-accent transition-colors"
+              className="flex items-center gap-2.5 -mx-1 pl-2 pr-1 py-1 rounded-md"
               onClick={() => setSidebarOpen(false)}
               aria-label={t('app.name')}
               title={t('nav.dashboard')}
             >
-              <ShellLogo size={24} className="text-primary shrink-0" />
-              <span className={cn(
-                'font-bold text-lg text-sidebar-foreground tracking-tight',
-                desktopSidebarCollapsed && 'lg:hidden',
-              )}>
-                {t('app.name')}
-              </span>
+              <ShellLogo
+                size={24}
+                className={cn('hidden shrink-0', desktopSidebarCollapsed && 'lg:block')}
+              />
+              <ShellWordmark
+                height={36}
+                className={cn('shrink-0', desktopSidebarCollapsed && 'lg:hidden')}
+              />
             </Link>
             <div className={cn(
               'flex items-center gap-0.5',
+              !desktopSidebarCollapsed && 'absolute right-2 top-1/2 -translate-y-1/2',
+              desktopSidebarCollapsed && 'lg:static lg:translate-y-0',
               desktopSidebarCollapsed && 'lg:flex-col lg:gap-1',
             )}>
-              <button
-                onClick={togglePrivacyMode}
-                className={cn(
-                  'text-sidebar-muted hover:text-sidebar-foreground transition-colors p-1 rounded-md hover:bg-sidebar-accent',
-                  desktopSidebarCollapsed && 'lg:flex lg:h-9 lg:w-9 lg:items-center lg:justify-center lg:p-0 lg:[&>svg]:h-[18px] lg:[&>svg]:w-[18px]',
-                )}
-                title={privacyMode ? t('privacy.show') : t('privacy.hide')}
-                aria-label={privacyMode ? t('privacy.show') : t('privacy.hide')}
-              >
-                {privacyMode ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
               {/* AI chat — same trigger as the mobile bar, ⌘J also
                   works. Lives in the sidebar header so the entry point
                   is visible even on first load (no floating button). */}
@@ -348,17 +304,6 @@ export function AppLayout() {
                   <Bot size={16} />
                 </button>
               )}
-              <button
-                onClick={toggleTheme}
-                className={cn(
-                  'text-sidebar-muted hover:text-sidebar-foreground transition-colors p-1 rounded-md hover:bg-sidebar-accent',
-                  desktopSidebarCollapsed && 'lg:flex lg:h-9 lg:w-9 lg:items-center lg:justify-center lg:p-0 lg:[&>svg]:h-[18px] lg:[&>svg]:w-[18px]',
-                )}
-                title={themeButtonLabel}
-                aria-label={themeButtonLabel}
-              >
-                <ThemeIcon size={16} />
-              </button>
             </div>
           </div>
 
@@ -576,17 +521,6 @@ export function AppLayout() {
             />
           </div>
 
-          <div className={cn('px-3 pb-3 pt-1', desktopSidebarCollapsed && 'lg:hidden')}>
-            <div
-              className="text-[11px] leading-4 text-sidebar-muted/70 text-center"
-              role="note"
-            >
-              <span className="sr-only">{versionA11yLabel}</span>
-              <span aria-hidden="true" className="block break-all line-clamp-2">
-                {t('app.versionLabel', { version: APP_VERSION })}
-              </span>
-            </div>
-          </div>
         </aside>
 
         {/* Main content */}
@@ -652,7 +586,7 @@ function UserMenu({
   agentsEnabled,
 }: {
   userInitial: string
-  logout: () => void
+  logout: () => Promise<void>
   onChangePassword: () => void
   onTwoFactor: () => void
   onPasskeys: () => void
@@ -911,7 +845,7 @@ function UserMenu({
         </DropdownMenuSub>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onClick={logout}
+          onSelect={() => void logout().catch(() => toast.error(t('common.error')))}
           className="text-rose-600 focus:text-rose-600"
         >
           {t('auth.logout')}

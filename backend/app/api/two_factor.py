@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import current_active_user, get_jwt_strategy
+from app.core.auth import current_active_user, get_session_strategy
 from app.core.auth_policy import require_local_auth_enabled
 from app.core.database import get_async_session
 from app.core.rate_limit import login_rate_limit
@@ -141,7 +141,5 @@ async def verify_2fa(
     # Delete temp token
     await r.delete(redis_key)
 
-    # Generate JWT
-    strategy = get_jwt_strategy()
-    token = await strategy.write_token(user)
+    token = await get_session_strategy(session).write_token(user)
     return {"access_token": token, "token_type": "bearer"}

@@ -24,6 +24,7 @@ import { Pencil, Trash2, Plus, RefreshCw, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/page-header'
 import { CategorySelect } from '@/components/category-select'
+import { IdentifyCategoryButton } from '@/components/identify-category-button'
 import { DatePickerInput } from '@/components/ui/date-picker-input'
 import { usePrivacyMode } from '@/hooks/use-privacy-mode'
 import { useAuth } from '@/contexts/auth-context'
@@ -433,9 +434,16 @@ function RecurringForm({
           <DatePickerInput value={endDate} onChange={setEndDate} placeholder={t('recurring.endDate')} className="w-full justify-start" />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label>{t('recurring.category')}</Label>
+          <div className="flex items-center justify-between gap-2">
+            <Label>{t('recurring.category')}</Label>
+            <IdentifyCategoryButton
+              description={description}
+              direction={type}
+              onIdentified={setCategoryId}
+            />
+          </div>
           <CategorySelect
             value={categoryId}
             onChange={setCategoryId}

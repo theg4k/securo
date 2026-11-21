@@ -24,7 +24,6 @@ import {
   BarChart3,
   Plus,
   Receipt,
-  CircleDollarSign,
   Wallet,
   Flame,
   FileSpreadsheet,
@@ -37,6 +36,7 @@ import {
 import { search as searchApi, type SearchHit, type SearchHitType } from '@/lib/api'
 import { cn, normalizeText } from '@/lib/utils'
 import { transactionDescription } from '@/lib/transaction-description'
+import { ShellWordmark } from '@/components/shell-logo'
 
 // ---------------------------------------------------------------------------
 // Static actions & navigation registry
@@ -676,8 +676,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             {/* Footer */}
             <div className="flex items-center justify-between gap-4 border-t border-border/60 bg-muted/30 px-4 py-2">
               <div className="flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
-                <CircleDollarSign size={11} className="text-primary" />
-                <span className="font-semibold tracking-tight text-foreground/90">Securo</span>
+                <ShellWordmark height={12} className="shrink-0" />
                 <span className="text-muted-foreground/50">/</span>
                 <span>{t('cmdk.footer.tagline')}</span>
               </div>

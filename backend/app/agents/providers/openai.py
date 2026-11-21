@@ -151,13 +151,23 @@ class OpenAIProvider(LLMProvider):
             "stream": True,
             "stream_options": {"include_usage": True},
         }
+        if (
+            self.disable_web_search
+            and urlparse(self.base_url).hostname == "openrouter.ai"
+        ):
+            # OpenRouter may enable its legacy web plugin at account level.
+            # Disable it for calls that must stay offline; categorization also
+            # passes no model-callable tools.
+            payload["plugins"] = [{"id": "web", "enabled": False}]
         if tools:
             payload["tools"] = _serialize_tools(tools)
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
 
         try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0)) as client:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(self.request_timeout_seconds, connect=10.0)
+            ) as client:
                 async with client.stream("POST", url, json=payload, headers=self._headers()) as resp:
                     if resp.status_code >= 400:
                         body = (await resp.aread()).decode("utf-8", errors="replace")

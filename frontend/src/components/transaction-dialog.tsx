@@ -36,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { CategorySelect } from '@/components/category-select'
+import { IdentifyCategoryButton } from '@/components/identify-category-button'
 import { PayeeSelect } from '@/components/payee-select'
 import { RuleDialog, type RuleDialogInitialData } from '@/components/rule-dialog'
 import { TransactionAttachments } from '@/components/transaction-attachments'
@@ -1167,7 +1168,7 @@ function TransactionForm({
           </div>
         </div>
       )}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>{t('transactions.type')}</Label>
           <select
@@ -1181,7 +1182,23 @@ function TransactionForm({
           </select>
         </div>
         <div className="space-y-2">
-          <Label>{t('transactions.category')}</Label>
+          <div className="flex items-center justify-between gap-2">
+            <Label>{t('transactions.category')}</Label>
+            <IdentifyCategoryButton
+              transactionId={transaction?.id}
+              description={isSynced
+                ? (transaction?.original_description || transaction?.description || description)
+                : description}
+              payee={isSynced
+                ? (transaction?.payee ?? undefined)
+                : (payeesList?.find((payee) => payee.id === payeeId)?.name
+                  ?? transaction?.payee_name
+                  ?? transaction?.payee
+                  ?? undefined)}
+              direction={type}
+              onIdentified={setCategoryId}
+            />
+          </div>
           <CategorySelect
             value={categoryId}
             onChange={setCategoryId}

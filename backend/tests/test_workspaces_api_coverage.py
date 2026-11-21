@@ -8,7 +8,7 @@ import uuid
 import pytest
 from httpx import AsyncClient
 
-from app.core.auth import get_jwt_strategy
+from app.core.auth import get_session_strategy
 
 
 # ---------------------------------------------------------------------------
@@ -147,9 +147,10 @@ async def test_invite_cannot_create_password_user_when_local_auth_disabled(
     client: AsyncClient,
     test_user,
     test_workspace,
+    session,
     oidc_only_settings,
 ):
-    token = await get_jwt_strategy().write_token(test_user)
+    token = await get_session_strategy(session).write_token(test_user)
     resp = await client.post(
         f"/api/workspaces/{test_workspace.id}/members",
         headers={"Authorization": f"Bearer {token}"},
@@ -165,9 +166,10 @@ async def test_invite_unknown_user_without_password_points_at_oidc_when_local_au
     client: AsyncClient,
     test_user,
     test_workspace,
+    session,
     oidc_only_settings,
 ):
-    token = await get_jwt_strategy().write_token(test_user)
+    token = await get_session_strategy(session).write_token(test_user)
     resp = await client.post(
         f"/api/workspaces/{test_workspace.id}/members",
         headers={"Authorization": f"Bearer {token}"},

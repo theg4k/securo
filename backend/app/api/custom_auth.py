@@ -6,9 +6,10 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import get_jwt_strategy, get_user_manager
+from app.core.auth import SessionStrategy, bearer_transport, get_session_strategy, get_user_manager
 from app.core.auth_policy import require_local_auth_enabled
 from app.core.database import get_async_session
+from app.core.rate_limit import login_rate_limit
 from app.core.redis import get_redis
 from app.models.passkey import UserPasskey
 
@@ -17,7 +18,7 @@ router = APIRouter()
 TEMP_TOKEN_TTL = 300  # 5 minutes
 
 
-@router.post("/login", dependencies=[Depends(require_local_auth_enabled)])
+@router.post("/login", dependencies=[Depends(login_rate_limit), Depends(require_local_auth_enabled)])
 async def login(
     credentials: OAuth2PasswordRequestForm = Depends(),
     user_manager=Depends(get_user_manager),
@@ -51,12 +52,15 @@ async def login(
         )
         return {"requires_2fa": True, "temp_token": temp_token, "available_methods": available_methods}
 
-    # Normal login — generate JWT
-    strategy = get_jwt_strategy()
-    token = await strategy.write_token(user)
+    token = await get_session_strategy(session).write_token(user)
     return {"access_token": token, "token_type": "bearer"}
 
 
 @router.post("/logout")
-async def logout():
+async def logout(
+    token: str | None = Depends(bearer_transport.scheme),
+    strategy: SessionStrategy = Depends(get_session_strategy),
+):
+    if token:
+        await strategy.destroy_token(token)
     return {"detail": "Logged out"}

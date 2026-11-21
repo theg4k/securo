@@ -17,6 +17,9 @@ export default defineConfig(async ({ mode }) => {
   const requestedBase = env.VITE_APP_BASE_PATH || process.env.VITE_APP_BASE_PATH || '/'
   const baseSegments = requestedBase.trim().split('/').filter(Boolean)
   const base = baseSegments.length ? `/${baseSegments.join('/')}/` : '/'
+  const publicAppUrl = frontendUrl && /^https?:\/\//.test(frontendUrl) && URL.canParse(frontendUrl)
+    ? new URL(base, frontendUrl).href
+    : base
   const appVersionRoot = env.APP_VERSION_ROOT || process.env.APP_VERSION_ROOT
   const appVersion = await resolveAppVersion(
     appVersionRoot || import.meta.dirname,
@@ -27,6 +30,7 @@ export default defineConfig(async ({ mode }) => {
     base,
     define: {
       __APP_VERSION__: JSON.stringify(appVersion),
+      'import.meta.env.PUBLIC_APP_URL': JSON.stringify(publicAppUrl),
     },
     build: {
       // Keep the existing per-chunk budget; optional locales load on demand.

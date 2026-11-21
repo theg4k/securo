@@ -77,7 +77,9 @@ class OllamaProvider(LLMProvider):
             payload["tools"] = _serialize_tools(tools)
 
         try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0)) as client:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(self.request_timeout_seconds, connect=10.0)
+            ) as client:
                 async with client.stream("POST", url, json=payload) as resp:
                     if resp.status_code >= 400:
                         body = (await resp.aread()).decode("utf-8", errors="replace")

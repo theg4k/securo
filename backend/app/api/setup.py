@@ -5,7 +5,7 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy import select, func, update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import get_jwt_strategy, get_user_manager, UserManager
+from app.core.auth import UserManager, get_session_strategy, get_user_manager
 from app.core.auth_policy import require_local_auth_enabled
 from app.core.database import get_async_session
 from app.models.account import Account
@@ -97,7 +97,6 @@ async def create_admin(
     await db_session.refresh(user)
 
     # Generate access token
-    strategy = get_jwt_strategy()
-    token = await strategy.write_token(user)
+    token = await get_session_strategy(db_session).write_token(user)
 
     return {"access_token": token, "token_type": "bearer"}

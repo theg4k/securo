@@ -1,21 +1,21 @@
+import secrets
 import uuid
 from decimal import Decimal
+from hashlib import sha256
 from typing import Optional
 
 from fastapi import Depends, Request
-from fastapi_users import BaseUserManager, FastAPIUsers, UUIDIDMixin, schemas
-from fastapi_users.authentication import (
-    AuthenticationBackend,
-    BearerTransport,
-    JWTStrategy,
-)
+from fastapi_users import BaseUserManager, FastAPIUsers, UUIDIDMixin, exceptions, schemas
+from fastapi_users.authentication import AuthenticationBackend, BearerTransport
 from fastapi_users.db import SQLAlchemyUserDatabase
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_policy import require_local_auth_enabled
 from app.core.config import get_settings
 from app.core.database import get_async_session
 from app.models.user import User
+from app.models.user_session import UserSession
 
 settings = get_settings()
 
@@ -84,17 +84,44 @@ async def get_user_manager(user_db: SQLAlchemyUserDatabase = Depends(get_user_db
 bearer_transport = BearerTransport(tokenUrl="/api/auth/login")
 
 
-def get_jwt_strategy() -> JWTStrategy:
-    return JWTStrategy(
-        secret=settings.secret_key.get_secret_value(),
-        lifetime_seconds=settings.access_token_expire_minutes * 60,
-    )
+class SessionStrategy:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def read_token(
+        self, token: str | None, user_manager: BaseUserManager[User, uuid.UUID]
+    ) -> User | None:
+        if not token:
+            return None
+        user_session = await self.session.get(UserSession, sha256(token.encode()).hexdigest())
+        if user_session is None:
+            return None
+        try:
+            return await user_manager.get(user_session.user_id)
+        except exceptions.UserNotExists:
+            return None
+
+    async def write_token(self, user: User) -> str:
+        token = secrets.token_urlsafe(32)
+        self.session.add(UserSession(token_hash=sha256(token.encode()).hexdigest(), user_id=user.id))
+        await self.session.commit()
+        return token
+
+    async def destroy_token(self, token: str, user: User | None = None) -> None:
+        await self.session.execute(
+            delete(UserSession).where(UserSession.token_hash == sha256(token.encode()).hexdigest())
+        )
+        await self.session.commit()
+
+
+def get_session_strategy(session: AsyncSession = Depends(get_async_session)) -> SessionStrategy:
+    return SessionStrategy(session)
 
 
 auth_backend = AuthenticationBackend(
-    name="jwt",
+    name="session",
     transport=bearer_transport,
-    get_strategy=get_jwt_strategy,
+    get_strategy=get_session_strategy,
 )
 
 fastapi_users = FastAPIUsers[User, uuid.UUID](get_user_manager, [auth_backend])

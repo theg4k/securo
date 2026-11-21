@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.app_settings import AppSetting
 from app.models.user import User
-from app.core.auth import get_jwt_strategy
+from app.core.auth import get_session_strategy
 
 
 pytestmark = pytest.mark.asyncio
@@ -55,9 +55,10 @@ class TestAdminUserCRUD:
         self,
         client: AsyncClient,
         test_superuser: User,
+        session: AsyncSession,
         oidc_only_settings,
     ):
-        token = await get_jwt_strategy().write_token(test_superuser)
+        token = await get_session_strategy(session).write_token(test_superuser)
         response = await client.post(
             "/api/admin/users",
             json={"email": "newuser@example.com", "password": "password123"},
@@ -71,10 +72,11 @@ class TestAdminUserCRUD:
         self,
         client: AsyncClient,
         test_superuser: User,
+        session: AsyncSession,
         oidc_only_settings,
     ):
         headers = {
-            "Authorization": f"Bearer {await get_jwt_strategy().write_token(test_superuser)}"
+            "Authorization": f"Bearer {await get_session_strategy(session).write_token(test_superuser)}"
         }
         password_response = await client.patch(
             f"/api/admin/users/{test_superuser.id}",
